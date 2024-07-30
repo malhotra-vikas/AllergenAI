@@ -7,7 +7,7 @@ from botocore.exceptions import NoCredentialsError, PartialCredentialsError
 def lambda_handler(event, context):
     # Define the S3 bucket and JSON file key
     bucket_name = '1010public'
-    file_key = 'the_cheesecake_factory_allergens.json'
+    file_key = 'the_cheesecake_factory_allergens_full.json'
 
     print("Lambda Event is ", event)
     
@@ -19,11 +19,10 @@ def lambda_handler(event, context):
         response = s3.get_object(Bucket=bucket_name, Key=file_key)
         print("S3 read response ", response)
 
-        # Pause execution for 3 seconds
-        time.sleep(3)
 
         data = json.loads(response['Body'].read().decode('utf-8'))
         print("Data in JSON is ", data)
+        
         
         # Extract the query parameters from the event
         query_item = None
@@ -43,21 +42,26 @@ def lambda_handler(event, context):
                 'body': json.dumps({'error': 'Please provide a menu item to query.'})
             }
         
-        # Search for the menu item in the JSON data
+        # Search for menu items that contain the query_item in the name
+        matching_items = []
         menu = data.get('menu', [])
         for item in menu:
-            if item['item'].lower() == query_item.lower():
-                return {
-                    'statusCode': 200,
-                    'body': json.dumps(item)
-                }
+            if query_item.lower() in item['item'].lower():
+                matching_items.append(item)
         
-        # If the item is not found, return a message
-        return {
-            'statusCode': 404,
-            'body': json.dumps({'error': 'Menu item not found.'})
-        }
+        # If no items are found, return a message
+        if not matching_items:
+            return {
+                'statusCode': 404,
+                'body': json.dumps({'error': 'No matching menu items found.'})
+            }
     
+        # Return the matching items
+        return {
+            'statusCode': 200,
+            'body': json.dumps(matching_items)
+        }
+
     except NoCredentialsError:
         return {
             'statusCode': 500,

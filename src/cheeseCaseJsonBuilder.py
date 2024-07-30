@@ -36,29 +36,32 @@ def extract_allergens(parts):
                 allergens["mayContain"].append(key)
     return allergens
 
-for line in lines:
-    line = line.strip()
+# Process the lines to extract menu items and allergens
+index = 0
+while index < len(lines):
+    line = lines[index].strip()
 
-    # Check if line contains allergen markers and more than 7 parts
-    if any(marker in line for marker in ["✓", "!"]) and len(line.split()) > 7:
-        parts = line.split()
-        item_name_parts = []
+    # Check if line looks like a menu item (not starting with an allergen marker and not empty)
+    if line and not any(marker in line for marker in ["✓", "!"]):
+        item_name = line
+        index += 1
         allergen_parts = []
-        for part in parts:
-            if part in ["✓", "!"] and len(allergen_parts) < 7:
-                allergen_parts.append(part)
-            else:
-                item_name_parts.append(part)
-        item_name = " ".join(item_name_parts)
 
-        print(item_name)
+        # Collect allergen markers (up to 7 parts)
+        while index < len(lines) and len(allergen_parts) < 7 and any(marker in lines[index] for marker in ["✓", "!"]):
+            allergen_parts.append(lines[index].strip())
+            index += 1
+
+        # Extract allergens for the item
         allergens = extract_allergens(allergen_parts)
-        print(allergens)        
+        print(f"Item: {item_name}, Allergens: {allergens}")
 
         menu_items.append({
             "item": item_name,
             "allergens": allergens
         })
+    else:
+        index += 1
 
 # Update the JSON structure with the new data
 menu_json["menu"] = menu_items
@@ -68,4 +71,4 @@ json_path_final = "/Users/vikas/builderspace/AllergenAI/src/the_cheesecake_facto
 with open(json_path_final, 'w') as json_file:
     json.dump(menu_json, json_file, indent=4)
 
-json_path_final
+print(f"Updated JSON saved to {json_path_final}")
