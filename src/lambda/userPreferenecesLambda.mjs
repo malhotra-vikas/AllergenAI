@@ -11,87 +11,187 @@ export const handler = async (event) => {
     );
 
     try {
-        // Log request method
-        console.log("httpMethod received:", event.httpMethod);
+        const method = event.httpMethod;
+        console.log("httpMethod received:", method);
 
-        if (event.httpMethod !== "POST") {
-            console.warn("Non-POST request received, rejecting.");
+        // --- POST: Insert or Update (Upsert) ---
+        if (method === "POST") {
+            console.log("Raw event.body:", event.body);
+            const body =
+                typeof event.body === "string" ? JSON.parse(event.body) : event.body;
+            console.log("Parsed body:", JSON.stringify(body, null, 2));
+
+            const { email, userPreference } = body;
+            console.log("Extracted email:", email);
+            console.log(
+                "Extracted userPreference:",
+                JSON.stringify(userPreference, null, 2)
+            );
+
+            if (!email || !userPreference) {
+                console.error("Validation failed: Missing email or userPreference");
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({
+                        error: "Missing email or userPreference",
+                    }),
+                };
+            }
+
+            const payload = [
+                {
+                    email,
+                    userpreference: userPreference,
+                    updated_at: new Date().toISOString(),
+                },
+            ];
+            console.log("Payload to Supabase:", JSON.stringify(payload, null, 2));
+
+            const supabaseUrl = `${SUPABASE_URL}/rest/v1/user_allergen_preferences?on_conflict=email`;
+            console.log("Supabase URL:", supabaseUrl);
+
+            const response = await fetch(supabaseUrl, {
+                method: "POST",
+                headers: {
+                    apikey: SUPABASE_SERVICE_ROLE_KEY,
+                    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                    "Content-Type": "application/json",
+                    Prefer: "resolution=merge-duplicates,return=representation",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            console.log("Supabase response status:", response.status);
+            const data = await response.json().catch(() => null);
+            console.log("Supabase response body:", JSON.stringify(data, null, 2));
+
+            if (!response.ok) {
+                console.error("Supabase error:", data);
+                return {
+                    statusCode: 500,
+                    body: JSON.stringify({
+                        error: "Supabase request failed",
+                        details: data,
+                    }),
+                };
+            }
+
+            console.log("=== Success (POST) ===");
             return {
-                statusCode: 405,
-                body: JSON.stringify({ error: "Method Not Allowed" }),
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "User allergen preferences saved successfully",
+                    data,
+                }),
             };
         }
 
-        // Parse body
-        console.log("Raw event.body:", event.body);
-        const body = typeof event.body === "string" ? JSON.parse(event.body) : event.body;
+        // --- GET: Fetch by email ---
+        if (method === "GET") {
+            const email =
+                event.queryStringParameters && event.queryStringParameters.email;
+            console.log("GET request for email:", email);
 
-        console.log("Parsed body:", JSON.stringify(body, null, 2));
+            if (!email) {
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({ error: "Missing email query parameter" }),
+                };
+            }
 
-        const { email, userPreference } = body;
+            const supabaseUrl = `${SUPABASE_URL}/rest/v1/user_allergen_preferences?email=eq.${encodeURIComponent(
+                email
+            )}`;
+            console.log("Supabase URL (GET):", supabaseUrl);
 
-        console.log("Extracted email:", email);
-        console.log("Extracted userPreference:", JSON.stringify(userPreference, null, 2));
+            const response = await fetch(supabaseUrl, {
+                method: "GET",
+                headers: {
+                    apikey: SUPABASE_SERVICE_ROLE_KEY,
+                    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                },
+            });
 
-        if (!email || !userPreference) {
-            console.error("Validation failed: Missing email or userPreference");
+            console.log("Supabase response status:", response.status);
+            const data = await response.json().catch(() => null);
+            console.log("Supabase response body:", JSON.stringify(data, null, 2));
+
+            if (!response.ok) {
+                console.error("Supabase error:", data);
+                return {
+                    statusCode: 500,
+                    body: JSON.stringify({ error: "Supabase GET failed", details: data }),
+                };
+            }
+
             return {
-                statusCode: 400,
-                body: JSON.stringify({ error: "Missing email or userPreference" }),
+                statusCode: 200,
+                body: JSON.stringify({ message: "Fetched successfully", data }),
             };
         }
 
-        const payload = [
-            {
-                email,
-                userpreference: userPreference,
-                updated_at: new Date().toISOString(),
-            },
-        ];
+        // --- DELETE: Remove by email ---
+        if (method === "DELETE") {
+            const email =
+                event.queryStringParameters && event.queryStringParameters.email;
+            console.log("DELETE request for email:", email);
 
-        console.log("Payload to Supabase:", JSON.stringify(payload, null, 2));
+            if (!email) {
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({ error: "Missing email query parameter" }),
+                };
+            }
 
-        const supabaseUrl = `${SUPABASE_URL}/rest/v1/user_allergen_preferences?on_conflict=email`;
+            const supabaseUrl = `${SUPABASE_URL}/rest/v1/user_allergen_preferences?email=eq.${encodeURIComponent(
+                email
+            )}`;
+            console.log("Supabase URL (DELETE):", supabaseUrl);
 
-        console.log("Supabase URL:", supabaseUrl);
+            const response = await fetch(supabaseUrl, {
+                method: "DELETE",
+                headers: {
+                    apikey: SUPABASE_SERVICE_ROLE_KEY,
+                    Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                },
+            });
 
-        const response = await fetch(supabaseUrl, {
-            method: "POST",
-            headers: {
-                apikey: SUPABASE_SERVICE_ROLE_KEY,
-                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-                "Content-Type": "application/json",
-                Prefer: "resolution=merge-duplicates,return=representation"
-            },
-            body: JSON.stringify(payload),
-        });
+            console.log("Supabase response status:", response.status);
+            const data = await response.text(); // DELETE often returns empty body
+            console.log("Supabase response body:", data);
 
-        console.log("Supabase response status:", response.status);
-        const data = await response.json();
-        console.log("Supabase response body:", JSON.stringify(data, null, 2));
+            if (!response.ok) {
+                console.error("Supabase error:", data);
+                return {
+                    statusCode: 500,
+                    body: JSON.stringify({
+                        error: "Supabase DELETE failed",
+                        details: data,
+                    }),
+                };
+            }
 
-        if (!response.ok) {
-            console.error("Supabase error:", data);
             return {
-                statusCode: 500,
-                body: JSON.stringify({ error: "Supabase request failed", details: data }),
+                statusCode: 200,
+                body: JSON.stringify({ message: "Deleted successfully" }),
             };
         }
 
-        console.log("=== Success ===");
+        // --- Method not allowed ---
+        console.warn("Unsupported httpMethod:", method);
         return {
-            statusCode: 200,
-            body: JSON.stringify({
-                message: "User allergen preferences saved successfully",
-                data,
-            }),
+            statusCode: 405,
+            body: JSON.stringify({ error: "Method Not Allowed" }),
         };
     } catch (err) {
         console.error("Lambda error caught:", err);
         console.error("Stack trace:", err.stack);
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: "Internal Server Error", details: err.message }),
+            body: JSON.stringify({
+                error: "Internal Server Error",
+                details: err.message,
+            }),
         };
     }
 };
