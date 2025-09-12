@@ -4,15 +4,25 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 export const handler = async (event) => {
     console.log("=== Lambda triggered ===");
     console.log("Raw event:", JSON.stringify(event, null, 2));
-    console.log("Environment SUPABASE_URL:", SUPABASE_URL);
-    console.log(
-        "Environment SUPABASE_SERVICE_ROLE_KEY (length only):",
-        SUPABASE_SERVICE_ROLE_KEY ? SUPABASE_SERVICE_ROLE_KEY.length : "NOT SET"
-    );
+
+    const corsHeaders = {
+        "Access-Control-Allow-Origin": "https://allergycondition.com", // restrict to your domain
+        "Access-Control-Allow-Methods": "OPTIONS,POST,GET,DELETE",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    };
 
     try {
         const method = event.httpMethod;
         console.log("httpMethod received:", method);
+
+        // --- Handle CORS preflight ---
+        if (method === "OPTIONS") {
+            return {
+                statusCode: 200,
+                headers: corsHeaders,
+                body: JSON.stringify({ message: "CORS preflight OK" }),
+            };
+        }
 
         // --- POST: Insert or Update (Upsert) ---
         if (method === "POST") {
@@ -29,12 +39,10 @@ export const handler = async (event) => {
             );
 
             if (!email || !userPreference) {
-                console.error("Validation failed: Missing email or userPreference");
                 return {
                     statusCode: 400,
-                    body: JSON.stringify({
-                        error: "Missing email or userPreference",
-                    }),
+                    headers: corsHeaders,
+                    body: JSON.stringify({ error: "Missing email or userPreference" }),
                 };
             }
 
@@ -45,11 +53,8 @@ export const handler = async (event) => {
                     updated_at: new Date().toISOString(),
                 },
             ];
-            console.log("Payload to Supabase:", JSON.stringify(payload, null, 2));
 
             const supabaseUrl = `${SUPABASE_URL}/rest/v1/user_allergen_preferences?on_conflict=email`;
-            console.log("Supabase URL:", supabaseUrl);
-
             const response = await fetch(supabaseUrl, {
                 method: "POST",
                 headers: {
@@ -61,14 +66,11 @@ export const handler = async (event) => {
                 body: JSON.stringify(payload),
             });
 
-            console.log("Supabase response status:", response.status);
             const data = await response.json().catch(() => null);
-            console.log("Supabase response body:", JSON.stringify(data, null, 2));
-
             if (!response.ok) {
-                console.error("Supabase error:", data);
                 return {
                     statusCode: 500,
+                    headers: corsHeaders,
                     body: JSON.stringify({
                         error: "Supabase request failed",
                         details: data,
@@ -76,9 +78,9 @@ export const handler = async (event) => {
                 };
             }
 
-            console.log("=== Success (POST) ===");
             return {
                 statusCode: 200,
+                headers: corsHeaders,
                 body: JSON.stringify({
                     message: "User allergen preferences saved successfully",
                     data,
@@ -90,11 +92,11 @@ export const handler = async (event) => {
         if (method === "GET") {
             const email =
                 event.queryStringParameters && event.queryStringParameters.email;
-            console.log("GET request for email:", email);
 
             if (!email) {
                 return {
                     statusCode: 400,
+                    headers: corsHeaders,
                     body: JSON.stringify({ error: "Missing email query parameter" }),
                 };
             }
@@ -102,8 +104,6 @@ export const handler = async (event) => {
             const supabaseUrl = `${SUPABASE_URL}/rest/v1/user_allergen_preferences?email=eq.${encodeURIComponent(
                 email
             )}`;
-            console.log("Supabase URL (GET):", supabaseUrl);
-
             const response = await fetch(supabaseUrl, {
                 method: "GET",
                 headers: {
@@ -112,20 +112,18 @@ export const handler = async (event) => {
                 },
             });
 
-            console.log("Supabase response status:", response.status);
             const data = await response.json().catch(() => null);
-            console.log("Supabase response body:", JSON.stringify(data, null, 2));
-
             if (!response.ok) {
-                console.error("Supabase error:", data);
                 return {
                     statusCode: 500,
+                    headers: corsHeaders,
                     body: JSON.stringify({ error: "Supabase GET failed", details: data }),
                 };
             }
 
             return {
                 statusCode: 200,
+                headers: corsHeaders,
                 body: JSON.stringify({ message: "Fetched successfully", data }),
             };
         }
@@ -134,11 +132,11 @@ export const handler = async (event) => {
         if (method === "DELETE") {
             const email =
                 event.queryStringParameters && event.queryStringParameters.email;
-            console.log("DELETE request for email:", email);
 
             if (!email) {
                 return {
                     statusCode: 400,
+                    headers: corsHeaders,
                     body: JSON.stringify({ error: "Missing email query parameter" }),
                 };
             }
@@ -146,8 +144,6 @@ export const handler = async (event) => {
             const supabaseUrl = `${SUPABASE_URL}/rest/v1/user_allergen_preferences?email=eq.${encodeURIComponent(
                 email
             )}`;
-            console.log("Supabase URL (DELETE):", supabaseUrl);
-
             const response = await fetch(supabaseUrl, {
                 method: "DELETE",
                 headers: {
@@ -156,14 +152,11 @@ export const handler = async (event) => {
                 },
             });
 
-            console.log("Supabase response status:", response.status);
             const data = await response.text(); // DELETE often returns empty body
-            console.log("Supabase response body:", data);
-
             if (!response.ok) {
-                console.error("Supabase error:", data);
                 return {
                     statusCode: 500,
+                    headers: corsHeaders,
                     body: JSON.stringify({
                         error: "Supabase DELETE failed",
                         details: data,
@@ -173,21 +166,21 @@ export const handler = async (event) => {
 
             return {
                 statusCode: 200,
+                headers: corsHeaders,
                 body: JSON.stringify({ message: "Deleted successfully" }),
             };
         }
 
         // --- Method not allowed ---
-        console.warn("Unsupported httpMethod:", method);
         return {
             statusCode: 405,
+            headers: corsHeaders,
             body: JSON.stringify({ error: "Method Not Allowed" }),
         };
     } catch (err) {
-        console.error("Lambda error caught:", err);
-        console.error("Stack trace:", err.stack);
         return {
             statusCode: 500,
+            headers: corsHeaders,
             body: JSON.stringify({
                 error: "Internal Server Error",
                 details: err.message,
