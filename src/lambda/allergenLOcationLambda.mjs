@@ -5,10 +5,10 @@ const fetchRestaurants = async (restaurantName, postalCode, city, state, accurac
 
     let url
     if (restaurantSearchCriteria === "latLong") {
-        url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${SERP_API_KEY}&hl=en&gl=us`;
+        url = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(query)}&api_key=${SERP_API_KEY}&hl=en&gl=us`;
     }
     if (restaurantSearchCriteria === "zipCode") {
-        url = `https://serpapi.com/search.json?q=${encodeURIComponent(query)}&api_key=${SERP_API_KEY}&hl=en&gl=us`;
+        url = `https://serpapi.com/search.json?engine=google_maps&q=${encodeURIComponent(query)}&api_key=${SERP_API_KEY}&hl=en&gl=us`;
     }
 
     console.log("URL being SERPED ", url)
@@ -27,6 +27,22 @@ const fetchRestaurants = async (restaurantName, postalCode, city, state, accurac
 
     // Try local_results
     let rawResults = json.local_results?.places || json.local_results;
+
+    // Fallback 1: check if it's a valid array
+    if (!Array.isArray(rawResults)) {
+        console.warn("⚠️ Unexpected SerpAPI format. Trying place_results:", rawResults);
+
+        // Fallback 2: check if place_results exists (single object)
+        if (json.place_results && typeof json.place_results === "object") {
+            rawResults = [json.place_results]; // wrap single object into an array
+        }
+    }
+
+    // Final check
+    if (!Array.isArray(rawResults)) {
+        console.warn("⚠️ Still unexpected format after fallbacks:", rawResults);
+        return [];
+    }
 
     if (!Array.isArray(rawResults)) {
         console.warn("⚠️ Unexpected SerpAPI format:", rawResults);
